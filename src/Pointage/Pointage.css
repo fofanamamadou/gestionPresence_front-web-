@@ -1,0 +1,352 @@
+.pointage-page {
+  padding: 24px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  margin-bottom: 24px;
+  text-align: center;
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.page-header h1 {
+  font-size: 28px;
+  color: #001529;
+  margin-bottom: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.page-header p {
+  color: #666;
+  font-size: 16px;
+  margin: 0;
+}
+
+.pointage-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Section statistiques */
+.stats-section {
+  margin-bottom: 24px;
+}
+
+.stats-section .ant-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.stats-section .ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Barre d'outils */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-right .ant-btn {
+  border-radius: 6px;
+}
+
+/* Carte des filtres */
+.filters-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.filters-card label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.filters-card .ant-picker,
+.filters-card .ant-select {
+  border-radius: 6px;
+}
+
+/* Carte du tableau */
+.table-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.table-card .ant-table {
+  border-radius: 8px;
+}
+
+.table-card .ant-table-thead > tr > th {
+  background: #fafafa;
+  border-bottom: 2px solid #f0f0f0;
+  font-weight: 600;
+  color: #262626;
+}
+
+.table-card .ant-table-tbody > tr:hover > td {
+  background: #f5f5f5;
+}
+
+/* Tags de statut personnalisés */
+.ant-tag {
+  border-radius: 12px;
+  font-weight: 500;
+  border: none;
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+  .pointage-page {
+    padding: 16px;
+  }
+  
+  .toolbar {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+  
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-section .ant-col {
+    margin-bottom: 16px;
+  }
+  
+  .filters-card .ant-row .ant-col {
+    margin-bottom: 16px;
+  }
+  
+  .page-header h1 {
+    font-size: 24px;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* Styles pour les messages Ant Design */
+.ant-message {
+  z-index: 9999;
+}
+
+/* Personnalisation des boutons */
+.ant-btn-primary {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.ant-btn-primary:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+}
+
+/* Personnalisation du DatePicker */
+.ant-picker {
+  border-radius: 6px;
+}
+
+/* Animation pour les cartes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stats-section .ant-card,
+.toolbar,
+.filters-card,
+.table-card {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+/* Styles pour les états de chargement */
+.ant-spin-container {
+  transition: opacity 0.3s;
+}
+
+/* Amélioration de l'accessibilité */
+.ant-btn:focus,
+.ant-input:focus,
+.ant-select:focus {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.pagination button:disabled {
+  background: #ddd;
+  cursor: not-allowed;
+}
+
+.face-id-button {
+  background: #4caf50;
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+
+.face-id-button:hover {
+  background: #3e8e41;
+}
+
+.pointage-page .ant-statistic-title {
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pointage-page .ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* Amélioration des transitions */
+.ant-card,
+.ant-btn,
+.ant-input,
+.ant-select-selector {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Style pour les états vides */
+.ant-empty {
+  margin: 40px 0;
+}
+
+/* Personnalisation de la pagination */
+.ant-pagination {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.ant-pagination-item {
+  border-radius: 6px;
+}
+
+.ant-pagination-item-active {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.ant-pagination-item-active a {
+  color: white;
+}
+
+/* Styles pour les tooltips */
+.ant-tooltip {
+  z-index: 1060;
+}
+
+/* Amélioration de l'espacement */
+.ant-card-body {
+  padding: 20px;
+}
+
+.ant-table-pagination {
+  margin: 16px 0;
+}
+
+/* Styles pour les indicateurs de statut */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.present {
+  background-color: #52c41a;
+}
+
+.status-dot.absent {
+  background-color: #f5222d;
+}
+
+.status-dot.late {
+  background-color: #faad14;
+}
+
+/* Styles pour les actions rapides */
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.quick-actions .ant-btn-sm {
+  padding: 4px 8px;
+  height: auto;
+  font-size: 12px;
+}
+
+/* Amélioration de l'affichage des données */
+.data-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #666;
+  font-size: 12px;
+}

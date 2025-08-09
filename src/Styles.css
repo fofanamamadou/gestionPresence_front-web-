@@ -1,7 +1,9 @@
-/* ========== CONTENU PRINCIPAL ========== */
+/* ========== LAYOUT PRINCIPAL - Structure de base uniquement ========== */
+/* Les styles détaillés sont maintenant gérés par Ant Design et /styles/designTokens.js */
+
 .content {
   margin-left: 250px;
-  padding: 120px 20px 40px; /* Ajusté pour tenir compte du header */
+  padding: 120px 20px 40px;
   width: calc(100% - 250px);
   background: #f5f7fa;
   min-height: 100vh;
@@ -9,19 +11,7 @@
   overflow-x: hidden;
 }
 
-/* Style global pour les conteneurs principaux */
-.main-container {
-  width: 100%;
-  max-width: 1400px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  margin: 0 auto;
-  overflow-x: auto;
-}
-
-/* ========== SIDEBAR MODERNE ========== */
+/* ========== SIDEBAR - Structure de base ========== */
 .sidebar {
   width: 250px;
   height: 100vh;
@@ -35,6 +25,7 @@
   padding-top: 20px;
   box-shadow: 5px 0 15px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease-in-out;
+  z-index: 1000;
 }
 
 .sidebar:hover {
@@ -53,7 +44,7 @@
   filter: drop-shadow(0px 0px 10px rgba(0, 183, 255, 0.7));
 }
 
-/* ========== MENU STYLÉ ========== */
+/* ========== MENU SIDEBAR ========== */
 .menu {
   list-style: none;
   padding: 0;
@@ -85,219 +76,34 @@
   transition: 0.3s ease-in-out;
 }
 
-/* ========== HEADER STYLÉ ========== */
+/* ========== HEADER - Structure de base ========== */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 15px 25px;
   background: white;
-  border-bottom: 2px solid #ddd;
-  box-shadow: 0px 3px 5px rgba(0, 0, 0, 0.1);
-  position: fixed; /* Changé de sticky à fixed */
+  border-bottom: 1px solid #e8e8e8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: fixed;
   top: 0;
   right: 0;
-  left: 250px; /* Pour tenir compte de la sidebar */
-  z-index: 1000;
+  left: 250px;
+  z-index: 999;
 }
 
-/* Effet technologique sur le texte Admin */
-.admin {
-  font-weight: bold;
-  font-size: 18px;
-  text-transform: uppercase;
-  color: #081f3e;
-  text-shadow: 0px 0px 10px rgba(0, 183, 255, 0.5);
-}
-
-/* ========== NOTIFICATIONS ========== */
-.notifications {
-  position: relative;
-  cursor: pointer;
-}
-
-.notif-icon {
-  font-size: 24px;
-  color: #333;
-}
-
-.notif-count {
-  position: absolute;
-  top: -5px;
-  right: -10px;
-  background: red;
-  color: white;
-  font-size: 12px;
-  padding: 3px 7px;
-  border-radius: 50%;
-  font-weight: bold;
-}
-
-.notif-dropdown {
-  position: absolute;
-  top: 35px;
-  right: 0;
-  background: white;
-  border: 1px solid #ddd;
-  padding: 10px;
-  border-radius: 5px;
-  box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.2);
-  width: 220px;
-  display: none;
-  z-index: 1000;
-}
-
-.notifications:hover .notif-dropdown {
-  display: block;
-}
-
-/* ========== STATISTIQUES MODERNES ========== */
-.stats-row {
-  display: flex;
-  justify-content: space-around;
-  flex-wrap: wrap;
-  width: 100%;
-  gap: 20px;
-  padding: 20px;
-}
-
-/* Effet futuriste léger */
-.stat-box {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 20px;
-  border-radius: 12px;
-  font-weight: bold;
-  width: 250px;
-  background: white;
-  color: black;
-  border: 1px solid #ddd;
-  box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease-in-out;
-  position: relative;
-}
-
-.stat-box:hover {
-  transform: scale(1.05);
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-/* Effet LED bleu autour des stat-box */
-.stat-box::before {
-  content: "";
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: 12px;
-  border: 2px solid transparent;
-  background: linear-gradient(45deg, transparent, #00b7ff, transparent);
-  background-size: 300%;
-  animation: neon-border 4s infinite linear;
-}
-
-@keyframes neon-border {
-  0% {
-    background-position: 0%;
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 200px;
   }
-  100% {
-    background-position: 300%;
-  }
-}
-
-/* Icônes stylisées */
-.stat-icon {
-  font-size: 35px;
-  color: #2c3e50;
-  margin-right: 15px;
-}
-
-/* Texte bien aligné */
-.stat-text {
-  text-align: left;
-}
-
-.stat-text h3 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: bold;
-}
-
-.stat-text p {
-  margin: 0;
-  font-size: 14px;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-/* ========== GRAPHIQUE ========== */
-.chart-container {
-  width: 100%;
-  max-width: 100%;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  text-align: center;
-  transition: all 0.3s ease-in-out;
-}
-
-.chart-container:hover {
-  transform: scale(1.02);
-  box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.2);
-}
-
-
-/* ========== UNIFORMISATION DES CADRES DE STATISTIQUES ========== */
-.stat-box {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 15px;
-  border-radius: 8px;
-  font-weight: bold;
-  width: 220px;
   
-  background-color: white !important; /* Tous les cadres en blanc */
-  color: black !important; /* Texte en noir */
-  border: 1px solid #ddd; /* Ajout d'un contour gris léger */
-  box-shadow: 0px 5px 10px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-/* Effet au survol */
-.stat-box:hover {
-  transform: translateY(-5px);
-  box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.2);
-}
-
-/* Uniformiser les icônes */
-.stat-icon {
-  font-size: 30px;
-  color: black !important; /* Icône en noir */
-  margin-right: 15px;
-}
-
-/* Texte bien aligné */
-.stat-text {
-  text-align: left;
-}
-
-.stat-text h3 {
-  margin: 0;
-  font-size: 22px;
-}
-
-.stat-text p {
-  margin: 0;
-  font-size: 14px;
-  text-transform: uppercase;
-}
-
-/* Supprimer les couleurs spécifiques */
-.stat-blue, .stat-gray, .stat-dark, .stat-light {
-  background-color: white !important;
-  color: black !important;
+  .content {
+    margin-left: 200px;
+    width: calc(100% - 200px);
+  }
+  
+  .header {
+    left: 200px;
+  }
 }

@@ -5,22 +5,21 @@ import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-import Header from "./Header/header";
-import Sidebar from './sidebar/Sidebar';
+import Header from "./pages/Header";
+import Sidebar from './pages/Sidebar';
 
-import Dashboard from './Dashboard/Dashboard';
-import AbsenceRetard from './AbsenceRetard/AbsenceRetard';
-import Filiere from './Filiere/Filiere';
-import Classe from './Classe/Classe';
-import Utilisateur from './utilisateur/Utilisateur';
-import Pointage from './Pointage/Pointage';
-import Modules from './Module/Modules';
-import Horaires from './Horaire/Horaires';
-import Planning from './Planning/Planning';
-import Login from './Login/Login';
-import ForgotPassword from './ForgotPassword/ForgotPassword';
-import PageNotFound from './Error/error';
-import Admin from './Admin/Admin';
+import Dashboard from './pages/Dashboard';
+import Filiere from './pages/Filiere';
+import Classe from './pages/Classe';
+import Utilisateur from './pages/Utilisateur';
+import Pointage from './pages/Pointage';
+import Modules from './pages/Modules';
+import Horaires from './pages/Horaires';
+import Planning from './pages/Planning';
+import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import PageNotFound from './pages/Error';
+import Admin from './pages/Admin';
 
 // Composant pour les routes protégées
 const ProtectedRoute = ({ children }) => {
@@ -95,11 +94,6 @@ const AppContent = () => {
               <Route path="/" element={
                 <ProtectedRoute>
                   <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/absence-retard" element={
-                <ProtectedRoute>
-                  <AbsenceRetard />
                 </ProtectedRoute>
               } />
               <Route path="/filiere" element={

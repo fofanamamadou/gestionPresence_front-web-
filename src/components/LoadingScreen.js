@@ -1,7 +1,6 @@
 import React from 'react';
 import { Spin } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
-import './LoadingScreen.css';
 
 const LoadingScreen = () => {
   const antIcon = <LoadingOutlined style={{ fontSize: 40 }} spin />;

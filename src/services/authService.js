@@ -1,4 +1,4 @@
-import axios from '../AxiosInstance/axiosInstance';
+import axios from '../utils/axiosInstance';
 
 class AuthService {
   setTokens(accessToken, refreshToken) {

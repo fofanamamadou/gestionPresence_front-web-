@@ -1,288 +1,533 @@
 import React, { useState, useEffect } from "react";
-import axios from "../utils/axiosInstance"; //  On utilise axiosInstance.js
-import { Modal, Form, Input, Select, TimePicker, message, Row, Card, Col, Spin } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import { 
+  Modal, 
+  Form, 
+  Select, 
+  TimePicker, 
+  Button, 
+  message, 
+  Table, 
+  Input,
+  Popconfirm,
+  Tag,
+  Spin
+} from "antd";
+import { 
+  PlusOutlined, 
+  EditOutlined, 
+  DeleteOutlined, 
+  SearchOutlined, 
+  ClockCircleOutlined,
+  BookOutlined,
+  HomeOutlined,
+  CalendarOutlined
+} from "@ant-design/icons";
 import moment from "moment";
-import { FaClock, FaPlus, FaCalendarAlt } from "react-icons/fa";
 
+import HoraireService from "../services/horaireService";
+import moduleService from "../services/moduleService"; 
+import { styles, colors, typography, spacing, borderRadius, shadows } from "../utils/styles/designTokens";
 
 const { Option } = Select;
 
 const Horaires = () => {
   const [form] = Form.useForm();
   const [horaires, setHoraires] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [modules, setModules] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [loadingList, setLoadingList] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedHoraire, setSelectedHoraire] = useState(null);
-
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const joursSemaine = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-  const salleClasse = ["Salle I", "Salle II", "Salle III", "Salle IV", "Salle V", "Salle VI", "Salle informatique"];
+  const sallesClasse = ["Salle I", "Salle II", "Salle III", "Salle IV", "Salle V", "Salle VI", "Salle informatique"];
 
-  // Récupérer les horaires depuis le backend 
+  // Charger les données
+  const fetchHoraires = async () => {
+    setLoadingList(true);
+    try {
+      const res = await HoraireService.getAllHoraires();
+      if (res.success) {
+        setHoraires(res.data);
+      } else {
+        message.error(res.error || "Erreur lors du chargement des horaires");
+      }
+    } catch {
+      message.error("Erreur serveur lors du chargement des horaires");
+    }
+    setLoadingList(false);
+  };
+
+  const fetchModules = async () => {
+    try {
+      const res = await moduleService.getAllModules();
+      if (res.success) {
+        setModules(res.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des modules:", error);
+    }
+  };
+
   useEffect(() => {
-    list_horaires();
-    list_modules();
+    fetchHoraires();
+    fetchModules();
   }, []);
 
-  //Liste des horaires
-  const list_horaires = () => {
-  setLoadingList(true);
-  axios.get("horaires").then(
-    (success) => {
-      setHoraires(success.data);
-      setLoadingList(false);
-    },
-    (error) => {
-      console.log(error);
-      setHoraires([]);
-      setLoadingList(false);
-    }
+  // Filtrer les horaires selon la recherche
+  const filteredHoraires = horaires.filter((horaire) =>
+    horaire.jours?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    horaire.module_details?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    horaire.salle?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-};
 
-  //Pour recuperer la liste des classes
-  const list_modules = () => {
-    axios.get("modules").then(
-      (success) => {
-        console.log(success);
-        console.log(filteredHoraires);
-        setModules(success.data);
-
-      },
-
-      (error) => {
-        console.log(error)
-        setModules([]);
-
-      }
-      )
-
-  };
-
-  const openModal = () => setIsModalOpen(true);
-  const closeModal = () => {
-    setIsModalOpen(false);
+  // Ouvrir modal ajout
+  const openModal = () => {
+    setIsModalOpen(true);
+    setEditMode(false);
+    setEditId(null);
     form.resetFields();
   };
-  const openEditModal = (horaire) => {
-    setIsEditing(true);
-    form.setFieldsValue({
-      jour: horaire.jours,
-      heureDebut: moment(horaire.time_start_course, "HH:mm"),
-      heureFin: moment(horaire.time_end_course, "HH:mm"),
-      module: horaire.module_details.id,
-      salle: horaire.salle,
-    });
-    setSelectedHoraire(horaire);
+
+  // Ouvrir modal modification
+  const openEditModal = (record) => {
     setIsModalOpen(true);
+    setEditMode(true);
+    setEditId(record.id);
+    form.setFieldsValue({
+      jours: record.jours,
+      time_start_course: moment(record.time_start_course, "HH:mm"),
+      time_end_course: moment(record.time_end_course, "HH:mm"),
+      module: record.module_details?.id,
+      salle: record.salle,
+    });
   };
-  
 
-  //Gestion de la recherche
-  const handleSearch = (e) => setSearchQuery(e.target.value);
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditMode(false);
+    setEditId(null);
+    form.resetFields();
+  };
 
-  //Ajout et modification
- const handleSubmitHoraire = async () => {
-  try {
+  // Envoi formulaire (ajout ou modification)
+  const handleSubmit = async (values) => {
     setLoadingSubmit(true);
-    const values = await form.validateFields();
+    try {
+      // Validation des heures
+      if (values.time_start_course.isAfter(values.time_end_course)) {
+        message.error("L'heure de début doit être avant l'heure de fin");
+        setLoadingSubmit(false);
+        return;
+      }
 
-    if (values.heureDebut.isAfter(values.heureFin)) {
-      message.error("L'heure de début doit être avant l'heure de fin");
-      setLoadingSubmit(false);
-      return;
-    }
+      const data = {
+        jours: values.jours,
+        time_start_course: values.time_start_course.format("HH:mm"),
+        time_end_course: values.time_end_course.format("HH:mm"),
+        module: values.module,
+        salle: values.salle,
+      };
 
-    const data = {
-      jours: values.jour,
-      time_start_course: values.heureDebut.format("HH:mm"),
-      time_end_course: values.heureFin.format("HH:mm"),
-      module: values.module,
-      salle: values.salle,
-    };
-
-    if (isEditing && selectedHoraire) {
-      await axios.put(`horaires/${selectedHoraire.id}`, data);
-      message.success("Horaire modifié avec succès !");
-    } else {
-      await axios.post("horaires", data);
-      message.success("Horaire ajouté avec succès !");
-    }
-
-    list_horaires();
-    closeModal();
-  } catch (err) {
-    console.error("Erreur lors de l'envoi :", err);
-    message.error(err.response?.data?.message || "Erreur dans le formulaire ou lors de l'envoi.");
-  } finally {
-    setLoadingSubmit(false);
-  }
-};
-
-  
-
-
-  //Fonction pour supprimer
-  const handleDeleteHoraire = (id) => {
-    const isConfirmed = window.confirm("Êtes-vous sûr de vouloir supprimer cet horaire ?");
-    if (isConfirmed) {
-      axios.delete(`horaires/${id}`).then(
-        () => {
-          message.success("Horaire supprimé avec succès !");
-          list_horaires();
-        },
-        () => {
-          message.error("Erreur lors de la suppression de l'horaire.");
+      let res;
+      if (editMode) {
+        res = await HoraireService.updateHoraire(editId, data);
+        if (res.success) {
+          message.success("Horaire modifié avec succès !");
+        } else {
+          message.error(res.error || "Erreur lors de la modification");
         }
-      );
-    } else {
-      message.info("Suppression annulée.");
-    }
-  };
-  
-  
-  
+      } else {
+        res = await HoraireService.createHoraire(data);
+        if (res.success) {
+          message.success("Horaire ajouté avec succès !");
+        } else {
+          message.error(res.error || "Erreur lors de l'ajout");
+        }
+      }
 
-  const filteredHoraires = horaires.filter((horaire) =>
-    horaire.jours.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    horaire.module_details?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    horaire.salle.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      if (res.success) {
+        closeModal();
+        fetchHoraires();
+      }
+    } catch (error) {
+      console.error("Erreur:", error);
+      message.error("Erreur serveur");
+    }
+    setLoadingSubmit(false);
+  };
+
+  // Suppression avec confirmation
+  const deleteHoraire = async (id) => {
+    setLoadingList(true);
+    try {
+      const res = await HoraireService.deleteHoraire(id);
+      if (res.success) {
+        message.success("Horaire supprimé avec succès !");
+        fetchHoraires();
+      } else {
+        message.error(res.error || "Erreur lors de la suppression");
+      }
+    } catch {
+      message.error("Erreur serveur");
+    }
+    setLoadingList(false);
+  };
+
+  // Fonction pour obtenir la couleur du jour
+  const getJourColor = (jour) => {
+    const colorMap = {
+      'Lundi': colors.chart.blue,
+      'Mardi': colors.chart.green,
+      'Mercredi': colors.chart.yellow,
+      'Jeudi': colors.chart.orange,
+      'Vendredi': colors.chart.cyan,
+      'Samedi': colors.chart.teal,
+      'Dimanche': colors.chart.red,
+    };
+    return colorMap[jour] || colors.primary.main;
+  };
+
+  // Colonnes de la table
+  const columns = [
+    {
+      title: (
+        <span>
+          <CalendarOutlined style={{ marginRight: 8 }} />
+          Jour
+        </span>
+      ),
+      dataIndex: "jours",
+      key: "jours",
+      sorter: (a, b) => a.jours.localeCompare(b.jours),
+      render: (jour) => (
+        <Tag 
+          color={getJourColor(jour)} 
+          style={{ 
+            fontWeight: typography.fontWeight.semibold,
+            padding: `${spacing.xs} ${spacing.sm}`,
+            borderRadius: borderRadius.sm
+          }}
+        >
+          {jour}
+        </Tag>
+      ),
+      filters: joursSemaine.map(jour => ({ text: jour, value: jour })),
+      onFilter: (value, record) => record.jours === value,
+    },
+    {
+      title: (
+        <span>
+          <ClockCircleOutlined style={{ marginRight: 8 }} />
+          Heures
+        </span>
+      ),
+      key: "heures",
+      render: (_, record) => (
+        <span style={{ fontWeight: typography.fontWeight.medium }}>
+          {record.time_start_course} - {record.time_end_course}
+        </span>
+      ),
+      sorter: (a, b) => a.time_start_course.localeCompare(b.time_start_course),
+    },
+    {
+      title: (
+        <span>
+          <BookOutlined style={{ marginRight: 8 }} />
+          Module
+        </span>
+      ),
+      dataIndex: ["module_details", "name"],
+      key: "module",
+      ellipsis: true,
+      render: (text) => (
+        <span style={{ 
+          color: colors.primary.main,
+          fontWeight: typography.fontWeight.medium 
+        }}>
+          {text || "Module non défini"}
+        </span>
+      ),
+    },
+    {
+      title: (
+        <span>
+          <HomeOutlined style={{ marginRight: 8 }} />
+          Salle
+        </span>
+      ),
+      dataIndex: "salle",
+      key: "salle",
+      render: (salle) => (
+        <Tag 
+          color="geekblue"
+          style={{ 
+            padding: `${spacing.xs} ${spacing.sm}`,
+            borderRadius: borderRadius.sm
+          }}
+        >
+          {salle}
+        </Tag>
+      ),
+      filters: sallesClasse.map(salle => ({ text: salle, value: salle })),
+      onFilter: (value, record) => record.salle === value,
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 130,
+      render: (_, record) => (
+        <div style={{ display: "flex", justifyContent: "center", gap: spacing.sm }}>
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            size="small"
+            onClick={() => openEditModal(record)}
+            style={{
+              backgroundColor: colors.primary.main,
+              borderColor: colors.primary.main,
+              borderRadius: borderRadius.sm,
+            }}
+            aria-label="Modifier l'horaire"
+          />
+          <Popconfirm
+            title="Voulez-vous supprimer cet horaire ?"
+            onConfirm={() => deleteHoraire(record.id)}
+            okText="Oui"
+            cancelText="Non"
+          >
+            <Button
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              style={{ borderRadius: borderRadius.sm }}
+              aria-label="Supprimer l'horaire"
+            />
+          </Popconfirm>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="horaires-page">
-      <h1>Gestion des Horaires <FaClock /></h1>
-      <div className="horaires-container">
-          {/* Search Bar */}
-          <div className="search-bar">
-            <input type="text" placeholder="Rechercher par jour, module ou salle..." value={searchQuery} onChange={handleSearch} />
-            <span className="search-icon">🔍</span>
-          </div>
+    <div style={styles.pageContainer}>
+      <h1 style={styles.pageTitle}>
+        <ClockCircleOutlined style={{ marginRight: spacing.sm }} />
+        Gestion des Horaires
+      </h1>
 
-        <div className="actions">
-          <button onClick={openModal} className="add-button">
-            <FaPlus /> Ajouter une Horaire
-          </button>
-          {/* <button className="export-button" onClick={exportToCSV}>
-            Exporter en CSV
-          </button> */}
-        </div>
-
-        {loadingList ? (
-          <div className="spinner-container">
-            <Spin size="large" tip="Chargement des horaires..." />
-          </div>
-        ) : (
-          <Row gutter={[20, 20]} justify="center" className="horaires-grid">
-            {filteredHoraires.slice().reverse().map((horaire) => (
-              <Col key={horaire.id}>
-                <Card
-                  onClick={() => openEditModal(horaire)}
-                  className="horaire-card"
-                >
-
-                  {/* Supprimer */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 10,
-                      right: 10,
-                      zIndex: 1,
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <DeleteOutlined
-                      onClick={() => handleDeleteHoraire(horaire.id)}
-                      style={{
-                        fontSize: 18,
-                        color: "#ff4d4f",
-                        cursor: "pointer",
-                      }}
-                    />
-                  </div>
-
-                <FaCalendarAlt className="horaire-icon" />
-                <h3>{horaire.jours}</h3>
-                <p><strong>Module:</strong> {horaire.module_details?.name || "Inconnu"}</p>
-                <p><strong>Heure:</strong> {horaire.time_start_course} - {horaire.time_end_course}</p>
-                <p><strong>Salle:</strong> {horaire.salle}</p>
-
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        )}
-
-        {/* Modal Ant Design */}
-        <Modal 
-          title={isEditing ? "Modifier un Horaire" : "Ajouter un Horaire"}
-          open={isModalOpen} 
-          onCancel={closeModal}
-          okText={isEditing ? "Modifier" : "Ajouter"}
-          cancelText="Annuler"
-          footer={null}
+      {/* Barre de recherche + bouton ajouter */}
+      <div
+        style={{
+          marginBottom: spacing.lg,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: spacing.sm,
+        }}
+      >
+        <Input.Search
+          placeholder="Rechercher par jour, module ou salle..."
+          allowClear
+          enterButton={<SearchOutlined />}
+          size="large"
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ maxWidth: 400, borderRadius: borderRadius.sm }}
+          value={searchQuery}
+        />
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          size="large"
+          onClick={openModal}
+          style={{ borderRadius: borderRadius.sm }}
         >
-          <Spin spinning={loadingSubmit} tip="Enregistrement en cours...">
-            <Form layout="vertical" form={form}>
-              <Form.Item name="jour" label="Jour" rules={[{ required: true }]}>
-                <Select placeholder="Choisir un jour">
-                  {joursSemaine.map((jour) => (
-                    <Option key={jour} value={jour}>{jour}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Form.Item name="heureDebut" label="Heure de début" rules={[{ required: true }]}>
-                <TimePicker format="HH:mm" />
-              </Form.Item>
-
-              <Form.Item name="heureFin" label="Heure de fin" rules={[{ required: true }]}>
-                <TimePicker format="HH:mm" />
-              </Form.Item>
-
-              <Form.Item label="Module" name="module">
-                <Select
-                  placeholder="Choisir un module"
-                >
-                  {modules.map((m) => (
-                    <Option key={m.id} value={m.id}>{m.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Form.Item name="salle" label="Salle" rules={[{ required: true }]}>
-                <Select placeholder="Choisir un salle">
-                  {salleClasse.map((salle) => (
-                    <Option key={salle} value={salle}>{salle}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              {/* Boutons personnalisés */}
-              <div className="modal-buttons">
-                <button type="button" onClick={closeModal} disabled={loadingSubmit}>Annuler</button>
-                <button
-                  type="button"
-                  onClick={handleSubmitHoraire}
-                  disabled={loadingSubmit}
-                >
-                  {loadingSubmit ? (
-                    <Spin size="small" style={{ color: "white" }} />
-                  ) : (
-                    isEditing ? "Enregistrer les modifications" : "Ajouter"
-                  )}
-                </button>
-              </div>
-            </Form>
-          </Spin>
-        </Modal>
-
+          Ajouter un horaire
+        </Button>
       </div>
+
+      {/* Table avec pagination et tri intégrés d'AntD */}
+      <Table
+        columns={columns}
+        dataSource={filteredHoraires}
+        rowKey="id"
+        loading={loadingList}
+        pagination={{ 
+          pageSize: 8,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} horaires`
+        }}
+        bordered
+        style={{ 
+          boxShadow: shadows.base, 
+          borderRadius: borderRadius.md,
+          backgroundColor: colors.secondary.white
+        }}
+        scroll={{ x: 800 }}
+      />
+
+      {/* Modal création/modification */}
+      <Modal
+        title={
+          <span>
+            <ClockCircleOutlined style={{ marginRight: spacing.sm }} />
+            {editMode ? "Modifier un horaire" : "Ajouter un horaire"}
+          </span>
+        }
+        open={isModalOpen}
+        onCancel={closeModal}
+        footer={null}
+        destroyOnClose
+        centered
+        width={600}
+      >
+        <Spin spinning={loadingSubmit} tip="Enregistrement en cours...">
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            preserve={false}
+            style={{ marginTop: spacing.md }}
+          >
+            <Form.Item
+              label={
+                <span>
+                  <CalendarOutlined style={{ marginRight: spacing.xs }} />
+                  Jour de la semaine
+                </span>
+              }
+              name="jours"
+              rules={[{ required: true, message: "Veuillez sélectionner un jour" }]}
+            >
+              <Select placeholder="Choisir un jour" size="large">
+                {joursSemaine.map((jour) => (
+                  <Option key={jour} value={jour}>
+                    {jour}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <div style={{ display: "flex", gap: spacing.md }}>
+              <Form.Item
+                label={
+                  <span>
+                    <ClockCircleOutlined style={{ marginRight: spacing.xs }} />
+                    Heure de début
+                  </span>
+                }
+                name="time_start_course"
+                rules={[{ required: true, message: "Heure de début requise" }]}
+                style={{ flex: 1 }}
+              >
+                <TimePicker 
+                  format="HH:mm" 
+                  size="large" 
+                  style={{ width: "100%" }}
+                  placeholder="Sélectionner l'heure"
+                />
+              </Form.Item>
+
+              <Form.Item
+                label={
+                  <span>
+                    <ClockCircleOutlined style={{ marginRight: spacing.xs }} />
+                    Heure de fin
+                  </span>
+                }
+                name="time_end_course"
+                rules={[{ required: true, message: "Heure de fin requise" }]}
+                style={{ flex: 1 }}
+              >
+                <TimePicker 
+                  format="HH:mm" 
+                  size="large" 
+                  style={{ width: "100%" }}
+                  placeholder="Sélectionner l'heure"
+                />
+              </Form.Item>
+            </div>
+
+            <Form.Item
+              label={
+                <span>
+                  <BookOutlined style={{ marginRight: spacing.xs }} />
+                  Module
+                </span>
+              }
+              name="module"
+              rules={[{ required: true, message: "Veuillez sélectionner un module" }]}
+            >
+              <Select 
+                placeholder="Choisir un module" 
+                size="large"
+                showSearch
+                filterOption={(input, option) =>
+                  option.children.toLowerCase().includes(input.toLowerCase())
+                }
+              >
+                {modules.map((module) => (
+                  <Option key={module.id} value={module.id}>
+                    {module.name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              label={
+                <span>
+                  <HomeOutlined style={{ marginRight: spacing.xs }} />
+                  Salle
+                </span>
+              }
+              name="salle"
+              rules={[{ required: true, message: "Veuillez sélectionner une salle" }]}
+            >
+              <Select placeholder="Choisir une salle" size="large">
+                {sallesClasse.map((salle) => (
+                  <Option key={salle} value={salle}>
+                    {salle}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: spacing.md,
+                  marginTop: spacing.lg,
+                }}
+              >
+                <Button 
+                  onClick={closeModal} 
+                  disabled={loadingSubmit}
+                  size="large"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loadingSubmit}
+                  size="large"
+                  style={{ borderRadius: borderRadius.sm }}
+                >
+                  {editMode ? "Modifier" : "Ajouter"}
+                </Button>
+              </div>
+            </Form.Item>
+          </Form>
+        </Spin>
+      </Modal>
     </div>
   );
 };

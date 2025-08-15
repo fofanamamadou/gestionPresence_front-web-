@@ -5,7 +5,7 @@ import axiosInstance from '../utils/axiosInstance';
 
 class RoleService {
   // Récupérer tous les rôles
-  async getRoles() {
+  async getAllRoles() {
     try {
       const response = await axiosInstance.get('roles/');
       return {

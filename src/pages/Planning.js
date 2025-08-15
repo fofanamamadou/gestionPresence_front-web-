@@ -1,290 +1,267 @@
-import React, { useState, useEffect, useCallback } from "react";
-
-import { Modal, Form, Input, Select, message, Button, DatePicker, TimePicker, InputNumber, Spin } from "antd";
-import { FaPlus, FaToggleOn, FaToggleOff, FaCheck, FaClock, FaExclamationCircle, FaFilter, FaTimes } from "react-icons/fa";
+import React, { useState, useEffect } from "react";
+import { 
+  Modal, 
+  Form, 
+  Input, 
+  Select, 
+  Button, 
+  message, 
+  Spin, 
+  Table, 
+  Popconfirm, 
+  DatePicker, 
+  InputNumber, 
+  Tag, 
+  Space, 
+  Card, 
+  Statistic, 
+  Row, 
+  Col,
+  Tooltip,
+  Alert
+} from "antd";
+import { 
+  PlusOutlined, 
+  EditOutlined, 
+  DeleteOutlined, 
+  SearchOutlined, 
+  CalendarOutlined,
+  UserOutlined,
+  BookOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ExclamationCircleOutlined,
+  DownloadOutlined,
+  FilterOutlined,
+  ClearOutlined,
+  EyeOutlined
+} from "@ant-design/icons";
 import dayjs from "dayjs";
-import axios from "../utils/axiosInstance"; //  On utilise axiosInstance.js
-import { useErrorHandler } from '../utils/errorHandler';
 
-export default function Planning() {
-  const initialCour = {
-    user: null,
-    module: null,
-    horaire: null,
-    date: "",
-    his_state: false
-  };
-  const { Option } = Select;
-  const [cours, setCours] = useState([]);
-  const [modules, setModules] = useState([]);
+import PlanningService from "../services/planningService";
+import { styles, colors, typography, spacing, borderRadius, shadows } from "../utils/styles/designTokens";
+import UserService from "../services/userService";
 
-  //Pour les modules d'un certains prof
-  const [modulesProf, setModulesProf] = useState([]);
+const { Option } = Select;
+const { RangePicker } = DatePicker;
 
+const Planning = () => {
+  // États principaux
+  const [plannings, setPlannings] = useState([]);
   const [professeurs, setProfesseurs] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [newCour, setNewCour] = useState(initialCour);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [duration, setDuration] = useState(1); // Nombre de semaines
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [horaires, setHoraires] = useState([]); // Pour stocker les horaires
+  const [horaires, setHoraires] = useState([]);
+  const [stats, setStats] = useState({});
+  
+  // États de chargement
+  const [loadingList, setLoadingList] = useState(false);
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [loadingHoraires, setLoadingHoraires] = useState(false);
 
-  // États pour le filtrage
+  // États modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editId, setEditId] = useState(null);
+
+  // États filtres
   const [filters, setFilters] = useState({
     search: "",
     professeur: null,
-    modules: [],
-    validationStatus: null // Ajout du filtre de validation
+    validationStatus: null,
+    dateRange: null
   });
 
-  // États de chargement
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingModules, setIsLoadingModules] = useState(false);
-  const [isLoadingHoraires, setIsLoadingHoraires] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
+  const [form] = Form.useForm();
 
-  // Options pour le filtre de validation
-  const validationOptions = [
-    { 
-      value: 'pending_validation', 
-      label: 'En attente de validation', 
-      description: 'Cours effectués mais non validés',
-      icon: <FaClock style={{ color: '#ffc107' }} />,
-      color: '#fff8e6'
-    },
-    { 
-      value: 'validated', 
-      label: 'Validés', 
-      description: 'Cours validés',
-      icon: <FaCheck style={{ color: '#28a745' }} />,
-      color: '#f0f9f1'
-    },
-    { 
-      value: 'not_done', 
-      label: 'Non effectués', 
-      description: 'Cours à venir',
-      icon: <FaExclamationCircle style={{ color: '#dc3545' }} />,
-      color: '#fdf3f3'
-    }
-  ];
-
-  const { handleError } = useErrorHandler();
-
+  // Charger les données initiales
   useEffect(() => {
-    list_plannings();
-    list_modules();
-    list_professeurs();
+    fetchPlannings();
+    fetchProfesseurs();
+    fetchStats();
   }, []);
 
-  //Empecher l'affiche du bouton modifier apres validation du cours
-  const isEditable = (cour) => {
-    return !cour.his_state; // uniquement si le cours n'est pas validé
-  };
-
-  // Filtrer les Cours
-  const filteredCours = cours.filter((cour) => {
-    const fullName = `${cour.user_details?.first_name || ""} ${cour.user_details?.last_name || ""}`.toLowerCase();
-    const moduleName = cour.module_details?.name?.toLowerCase() || "";
-    
-    // Filtre de recherche
-    const searchMatch = filters.search === "" || 
-      fullName.includes(filters.search.toLowerCase()) || 
-      moduleName.includes(filters.search.toLowerCase());
-
-    // Filtre par professeur
-    const profMatch = !filters.professeur || cour.user === filters.professeur;
-
-    // Filtre par modules
-    const moduleMatch = filters.modules.length === 0 || filters.modules.includes(cour.module);
-
-    // Filtre par état de validation
-    let validationMatch = true;
-    if (filters.validationStatus) {
-      switch (filters.validationStatus) {
-        case 'pending_validation':
-          validationMatch = cour.his_state && !cour.validate;
-          break;
-        case 'validated':
-          validationMatch = cour.validate;
-          break;
-        case 'not_done':
-          validationMatch = !cour.his_state;
-          break;
-        default:
-          validationMatch = true;
+  // Charger les plannings
+  const fetchPlannings = async () => {
+    setLoadingList(true);
+    try {
+      const res = await PlanningService.getAllPlannings();
+      if (res.success) {
+        setPlannings(res.data);
+      } else {
+        message.error(res.error || "Erreur lors du chargement des plannings");
       }
+    } catch {
+      message.error("Erreur serveur lors du chargement");
     }
-
-    return searchMatch && profMatch && moduleMatch && validationMatch;
-  });
-
-  // Pagination
-  const itemsPerPage = 5;
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.ceil(filteredCours.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredCours.slice(indexOfFirstItem, indexOfLastItem);
-
-  const nextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    setLoadingList(false);
   };
 
-  const prevPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  // Charger les professeurs
+  const fetchProfesseurs = async () => {
+    try {
+      const res = await UserService.getProfessors();
+      if (res.success) {
+        setProfesseurs(res.data);
+      } else {
+        message.error(res.error || "Erreur lors du chargement des plannings");
+      }
+    } catch (error) {
+      message.error("Erreur lors du chargement des professeurs:", error);
+    }
+  };
+
+  // Charger les statistiques
+  const fetchStats = async () => {
+    setLoadingStats(true);
+    try {
+      const res = await PlanningService.getPlanningStats();
+      if (res.success) {
+        setStats(res.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des statistiques:", error);
+    }
+    setLoadingStats(false);
+  };
+
+
+  // Filtrer les plannings
+  const getFilteredPlannings = () => {
+    return plannings.filter((planning) => {
+      const fullName = `${planning.user_details?.first_name || ""} ${planning.user_details?.last_name || ""}`.toLowerCase();
+      const moduleName = planning.module_details?.name?.toLowerCase() || "";
+      
+      // Filtre recherche
+      const searchMatch = !filters.search || 
+        fullName.includes(filters.search.toLowerCase()) || 
+        moduleName.includes(filters.search.toLowerCase());
+
+      // Filtre professeur
+      const profMatch = !filters.professeur || planning.user === filters.professeur;
+
+      // Filtre module
+      const moduleMatch = !filters.module || planning.horaire_details?.module === filters.module;
+
+      // Filtre validation
+      let validationMatch = true;
+      if (filters.validationStatus) {
+        switch (filters.validationStatus) {
+          case 'pending_admin':
+            validationMatch = planning.is_validated_by_professor && !planning.is_validated_by_admin;
+            break;
+          case 'validated_admin':
+            validationMatch = planning.is_validated_by_admin;
+            break;
+          case 'pending_professor':
+            validationMatch = !planning.is_validated_by_professor;
+            break;
+          default:
+            validationMatch = true;
+        }
+      }
+
+      // Filtre date
+      let dateMatch = true;
+      if (filters.dateRange && filters.dateRange.length === 2) {
+        const planningDate = dayjs(planning.date);
+        dateMatch = planningDate.isAfter(filters.dateRange[0]) && 
+                   planningDate.isBefore(filters.dateRange[1]);
+      }
+
+      return searchMatch && profMatch && moduleMatch && validationMatch && dateMatch;
+    });
+  };
+
+  // Ouvrir modal ajout
+  const openModal = () => {
+    setIsModalOpen(true);
+    setEditMode(false);
+    setEditId(null);
+    form.resetFields();
+  };
+
+  // Ouvrir modal modification
+  const openEditModal = (record) => {
+    setIsModalOpen(true);
+    setEditMode(true);
+    setEditId(record.id);
+    form.setFieldsValue({
+      user: record.user,
+      horaire: record.horaire,
+      date: dayjs(record.date),
+      duration: 1
+    });
+    
+
+    
+    
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setNewCour(initialCour);
+    setEditMode(false);
+    form.resetFields();
+    setHoraires([]);
   };
 
-  // Gestion des changements dans le formulaire
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewCour({ ...newCour, [name]: value });
-  };
-
-  // Gestion de la recherche
-  const handleSearch = (e) => setSearchQuery(e.target.value);
-
-  // Ouvrir & fermer le modal
-  const openModal = () => setIsModalOpen(true);
-
-  //Fonction pour exporter en CSV
-  const exportToCSV = () => {
-    const headers = ["Professeur", "Module", "Date", "Heure Début", "Heure Fin", "Salle", "Statut"];
-    
-    const rows = filteredCours.map(cour => [
-      cour.user_details ? `${cour.user_details.first_name} ${cour.user_details.last_name}` : "Inconnu",
-      cour.module_details ? cour.module_details.name : "Inconnu",
-      cour.date,
-      cour.time_start_course,
-      cour.time_end_course,
-      cour.salle,
-      cour.his_state ? "Validé" : "Non Validé"
-    ]);
-  
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(","))
-      .join("\n");
-  
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "planning_cours.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-  
-
-  //Recuperer les modules d'un certain professeur 
-  const fetchModulesByProfesseur = async (profId) => {
-    if (!profId) {
-      setModulesProf([]);
-      return;
-    }
-    
-    setIsLoadingModules(true);
+  // Soumettre le formulaire
+  const handleSubmit = async (values) => {
+    setLoadingSubmit(true);
     try {
-      const response = await axios.get(`professeurs/${profId}/modules/`);
-      setModulesProf(response.data);
-    } catch (err) {
-      console.error("Erreur lors du chargement des modules du professeur :", err);
-      setModulesProf([]);
-      message.error("Erreur lors du chargement des modules");
-    } finally {
-      setIsLoadingModules(false);
-    }
-  };
-  
+      const planningData = {
+        ...values,
+        date: values.date.format('YYYY-MM-DD')
+      };
 
-
-  //Pour recuperer la liste des cours
-  const list_plannings = async () => {
-    setIsLoading(true);
-    try {
-      const response = await axios.get("plannings");
-      setCours(response.data);
-    } catch (error) {
-      console.log(error);
-      setCours([]);
-      message.error("Erreur lors du chargement des plannings");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  //Liste des modules
-  const list_modules = () => {
-    axios.get("modules").then(
-      (success) => {
-        console.log(success);
-        setModules(success.data);
-
-      },
-
-      (error) => {
-        console.log(error)
-        setModules([]);
-
+      let res;
+      if (editMode) {
+        res = await PlanningService.updatePlanning(editId, planningData);
+      } else {
+        // Générer plusieurs plannings si duration > 1
+        if (values.duration > 1) {
+          const selectedHoraire = horaires.find(h => h.id === values.horaire);
+          const dates = generateCourseDates(values.date, selectedHoraire?.jours, values.duration);
+          
+          const planningsArray = dates.map(date => ({
+            ...planningData,
+            date: date
+          }));
+          
+          res = await PlanningService.createMultiplePlannings(planningsArray);
+        } else {
+          res = await PlanningService.createPlanning(planningData);
+        }
       }
-      )
 
-  };
-  //Liste des modules
-  const list_professeurs = () => {
-    axios.get("users/professors").then(
-      (success) => {
-        console.log(success);
-        setProfesseurs(success.data);
-
-      },
-
-      (error) => {
-        console.log(error)
-        setProfesseurs([]);
-
+      if (res.success) {
+        message.success(editMode ? "Planning modifié avec succès !" : "Planning(s) ajouté(s) avec succès !");
+        closeModal();
+        fetchPlannings();
+        fetchStats();
+      } else {
+        message.error(res.error || "Erreur lors de l'opération");
       }
-      )
-
+    } catch {
+      message.error("Erreur serveur");
+    }
+    setLoadingSubmit(false);
   };
 
-  // Fonction pour récupérer les horaires d'un module
-  const fetchHorairesByModule = async (moduleId) => {
-    if (!moduleId) {
-      setHoraires([]);
-      return;
-    }
-
-    setIsLoadingHoraires(true);
-    try {
-      const response = await axios.get(`horaires/module/${moduleId}/`);
-      setHoraires(response.data);
-    } catch (err) {
-      console.error("Erreur lors du chargement des horaires:", err);
-      setHoraires([]);
-      message.error("Erreur lors du chargement des horaires");
-    } finally {
-      setIsLoadingHoraires(false);
-    }
-  };
-
-  // Fonction pour générer les dates des cours sur plusieurs semaines
+  // Générer les dates pour plusieurs semaines
   const generateCourseDates = (startDate, selectedDay, numberOfWeeks) => {
     const dates = [];
     const startMoment = dayjs(startDate);
     
-    // Trouver le prochain jour correspondant
-    let nextDate = startMoment.day(getDayNumber(selectedDay));
+    const dayNumbers = {
+      'Lundi': 1, 'Mardi': 2, 'Mercredi': 3, 'Jeudi': 4,
+      'Vendredi': 5, 'Samedi': 6, 'Dimanche': 0
+    };
+    
+    let nextDate = startMoment.day(dayNumbers[selectedDay]);
     if (nextDate.isBefore(startMoment)) {
       nextDate = nextDate.add(1, 'week');
     }
 
-    // Générer les dates pour le nombre de semaines spécifié
     for (let i = 0; i < numberOfWeeks; i++) {
       dates.push(nextDate.add(i, 'week').format('YYYY-MM-DD'));
     }
@@ -292,436 +269,533 @@ export default function Planning() {
     return dates;
   };
 
-  // Fonction pour convertir le jour en numéro
-  const getDayNumber = (day) => {
-    const days = {
-      'Lundi': 1,
-      'Mardi': 2,
-      'Mercredi': 3,
-      'Jeudi': 4,
-      'Vendredi': 5,
-      'Samedi': 6,
-      'Dimanche': 0
-    };
-    return days[day];
+  // Supprimer un planning
+  const deletePlanning = async (id) => {
+    setLoadingList(true);
+    try {
+      const res = await PlanningService.deletePlanning(id);
+      if (res.success) {
+        message.success("Planning supprimé avec succès !");
+        fetchPlannings();
+        fetchStats();
+      } else {
+        message.error(res.error || "Erreur lors de la suppression");
+      }
+    } catch {
+      message.error("Erreur serveur");
+    }
+    setLoadingList(false);
   };
 
-  // Modification de la fonction saveCour pour gérer plusieurs semaines
-  const saveCour = async () => {
-    if (!newCour.horaire || !duration) {
-      message.error("Veuillez sélectionner un horaire et une durée");
-      return;
+  // Valider un cours (admin)
+  const validateCours = async (id) => {
+    try {
+      const res = await PlanningService.validateCoursByAdmin(id);
+      if (res.success) {
+        message.success("Cours validé avec succès !");
+        fetchPlannings();
+        fetchStats();
+      } else {
+        message.error(res.error || "Erreur lors de la validation");
+      }
+    } catch {
+      message.error("Erreur serveur");
     }
+  };
 
-    const selectedHoraire = horaires.find(h => h.id === newCour.horaire);
-    if (!selectedHoraire) {
-      message.error("Horaire non trouvé");
-      return;
+  // Réinitialiser la validation
+  const resetValidation = async (id) => {
+    try {
+      const res = await PlanningService.resetPlanningValidation(id);
+      if (res.success) {
+        message.success("Validation réinitialisée avec succès !");
+        fetchPlannings();
+        fetchStats();
+      } else {
+        message.error(res.error || "Erreur lors de la réinitialisation");
+      }
+    } catch {
+      message.error("Erreur serveur");
     }
+  };
 
-    const dates = generateCourseDates(dayjs(), selectedHoraire.jours, duration);
+  // Exporter en CSV
+  const exportToCSV = async () => {
+    try {
+      const filteredData = getFilteredPlannings();
+      const headers = ["Professeur", "Module", "Date", "Heure Début", "Heure Fin", "Salle", "Statut Professeur", "Statut Admin"];
+      
+      const rows = filteredData.map(planning => [
+        planning.user_details ? `${planning.user_details.first_name} ${planning.user_details.last_name}` : "Non assigné",
+        planning.module_details?.name || "Non défini",
+        dayjs(planning.date).format('DD/MM/YYYY'),
+        planning.horaire_details?.time_start_course?.slice(0, 5) || "",
+        planning.horaire_details?.time_end_course?.slice(0, 5) || "",
+        planning.horaire_details?.salle || "",
+        planning.is_validated_by_professor ? "Validé" : "Non validé",
+        planning.is_validated_by_admin ? "Validé" : "Non validé"
+      ]);
     
-    setIsSaving(true);
-    try {
-      const promises = dates.map(date => {
-        const courData = {
-          ...newCour,
-          date: date
-        };
-        return axios.post("plannings", courData);
-      });
-
-      await Promise.all(promises);
-      message.success(`${dates.length} cours ajoutés avec succès !`);
-      await list_plannings();
-      closeModal();
+      const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${cell}"`).join(","))
+        .join("\n");
+    
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `planning_${dayjs().format('YYYY-MM-DD')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      message.success("Export CSV réalisé avec succès !");
     } catch (error) {
-      console.error("Erreur lors de l'opération", error);
-      message.error("Une erreur est survenue lors de l'ajout des cours");
-    } finally {
-      setIsSaving(false);
+      message.error("Erreur lors de l'export CSV");
     }
   };
 
-  const handleValidation = async (planningId) => {
-    setIsValidating(true);
-    try {
-      await axios.put(`plannings/admin/valider/${planningId}/`);
-      message.success("Cours validé avec succès !");
-      await list_plannings();
-    } catch (error) {
-      console.error("Erreur lors de la validation:", error);
-      message.error(error.response?.data?.message || "Erreur lors de la validation");
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  const ValidationButton = ({ cours }) => {
-    if (cours.validate) {
-      return (
-        <div className="validation-status validated">
-          <FaCheck style={{ color: '#28a745', fontSize: '20px' }} />
-        </div>
-      );
-    }
-
-    if (!cours.his_state) {
-      return (
-        <button 
-          className="validation-button disabled"
-          disabled
-          title="Le cours doit d'abord être marqué comme effectué"
-        >
-          <FaExclamationCircle style={{ marginRight: '5px' }} />
-          En attente du cours
-        </button>
-      );
-    }
-
-    return (
-      <button 
-        className="validation-button pending"
-        onClick={() => handleValidation(cours.id)}
-      >
-        <FaClock style={{ marginRight: '5px' }} />
-        Valider le cours
-      </button>
-    );
-  };
-
-  // Fonction pour mettre à jour les filtres
-  const updateFilters = (type, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [type]: value
-    }));
-  };
-
-  // Réinitialiser tous les filtres
+  // Réinitialiser les filtres
   const resetFilters = () => {
     setFilters({
       search: "",
       professeur: null,
-      modules: [],
-      validationStatus: null
+      validationStatus: null,
+      dateRange: null
     });
   };
 
-  // Effet pour charger les modules quand un professeur est sélectionné
-  useEffect(() => {
-    if (filters.professeur) {
-      fetchModulesByProfesseur(filters.professeur);
-    } else {
-      setModulesProf([]);
+  // Rendu du statut de validation
+  const renderValidationStatus = (planning) => {
+    if (planning.is_validated_by_admin) {
+      return (
+        <Tag color="success" icon={<CheckCircleOutlined />}>
+          Validé Admin
+        </Tag>
+      );
     }
-  }, [filters.professeur]);
+    
+    if (planning.is_validated_by_professor) {
+      return (
+        <Tag color="warning" icon={<ClockCircleOutlined />}>
+          En attente Admin
+        </Tag>
+      );
+    }
+    
+    return (
+      <Tag color="error" icon={<ExclamationCircleOutlined />}>
+        Non effectué
+      </Tag>
+    );
+  };
+
+  // Rendu des actions
+  const renderActions = (_, record) => {
+    const actions = [];
+
+    // Bouton voir détails
+    actions.push(
+      <Tooltip title="Voir les détails" key="view">
+        <Button
+          type="text"
+          icon={<EyeOutlined />}
+          size="small"
+          onClick={() => openEditModal(record)}
+        />
+      </Tooltip>
+    );
+
+    // Bouton modifier (si pas validé par le prof)
+    if (!record.is_validated_by_professor) {
+      actions.push(
+        <Tooltip title="Modifier" key="edit">
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            size="small"
+            onClick={() => openEditModal(record)}
+          />
+        </Tooltip>
+      );
+    }
+
+    // Bouton valider (si validé par le prof mais pas par l'admin)
+    if (record.is_validated_by_professor && !record.is_validated_by_admin) {
+      actions.push(
+        <Tooltip title="Valider le cours" key="validate">
+          <Button
+            type="text"
+            icon={<CheckCircleOutlined />}
+            size="small"
+            style={{ color: colors.status.success }}
+            onClick={() => validateCours(record.id)}
+          />
+        </Tooltip>
+      );
+    }
+
+    // Bouton réinitialiser (si validé)
+    if (record.is_validated_by_professor || record.is_validated_by_admin) {
+      actions.push(
+        <Tooltip title="Réinitialiser la validation" key="reset">
+          <Popconfirm
+            title="Voulez-vous réinitialiser la validation ?"
+            onConfirm={() => resetValidation(record.id)}
+            okText="Oui"
+            cancelText="Non"
+          >
+            <Button
+              type="text"
+              icon={<ClearOutlined />}
+              size="small"
+              style={{ color: colors.status.warning }}
+            />
+          </Popconfirm>
+        </Tooltip>
+      );
+    }
+
+    // Bouton supprimer
+    actions.push(
+      <Tooltip title="Supprimer" key="delete">
+        <Popconfirm
+          title="Voulez-vous supprimer ce planning ?"
+          onConfirm={() => deletePlanning(record.id)}
+          okText="Oui"
+          cancelText="Non"
+        >
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            size="small"
+          />
+        </Popconfirm>
+      </Tooltip>
+    );
+
+    return <Space size="small">{actions}</Space>;
+  };
+
+  // Colonnes du tableau
+  const columns = [
+    {
+      title: "Professeur",
+      dataIndex: "user_details",
+      key: "professeur",
+      sorter: (a, b) => {
+        const nameA = `${a.user_details?.first_name || ""} ${a.user_details?.last_name || ""}`;
+        const nameB = `${b.user_details?.first_name || ""} ${b.user_details?.last_name || ""}`;
+        return nameA.localeCompare(nameB);
+      },
+      render: (userDetails) => userDetails ? 
+        `${userDetails.first_name} ${userDetails.last_name}` : 
+        "Non assigné",
+    },
+    {
+      title: "Date",
+      dataIndex: "date",
+      key: "date",
+      sorter: (a, b) => dayjs(a.date).unix() - dayjs(b.date).unix(),
+      render: (date) => dayjs(date).format('DD/MM/YYYY'),
+    },
+    {
+      title: "Horaire",
+      key: "horaire",
+      render: (_, record) => record.horaire_details ? (
+        <div>
+          <div>{record.horaire_details.time_start_course?.slice(0, 5)} - {record.horaire_details.time_end_course?.slice(0, 5)}</div>
+          <div style={{ fontSize: typography.fontSize.sm, color: colors.text.secondary }}>
+            {record.horaire_details.jours} - {record.horaire_details.salle}
+          </div>
+        </div>
+      ) : "Non défini",
+    },
+    {
+      title: "Statut",
+      key: "status",
+      filters: [
+        { text: 'Validé Admin', value: 'validated_admin' },
+        { text: 'En attente Admin', value: 'pending_admin' },
+        { text: 'Non effectué', value: 'pending_professor' },
+      ],
+      onFilter: (value, record) => {
+        switch (value) {
+          case 'validated_admin': return record.is_validated_by_admin;
+          case 'pending_admin': return record.is_validated_by_professor && !record.is_validated_by_admin;
+          case 'pending_professor': return !record.is_validated_by_professor;
+          default: return true;
+        }
+      },
+      render: (_, record) => renderValidationStatus(record),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 150,
+      render: renderActions,
+    },
+  ];
+
+  const filteredPlannings = getFilteredPlannings();
 
   return (
-    <div className="planning-page">
-      <h1>Planning des Cours 🗓️</h1>
-      <div className="planning-container">
-        <div className="filters-section">
-          <div className="search-bar">
-            <Input
-              placeholder="Rechercher un professeur ou un module..."
-              value={filters.search}
-              onChange={(e) => updateFilters('search', e.target.value)}
-              prefix={<FaFilter style={{ color: '#8c8c8c' }} />}
-              allowClear
+    <div style={styles.pageContainer}>
+      <h1 style={styles.pageTitle}>Gestion des Plannings 📅</h1>
+
+      {/* Statistiques */}
+      <Row gutter={[16, 16]} style={{ marginBottom: spacing.lg }}>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Total Plannings"
+              value={stats.total || 0}
+              prefix={<CalendarOutlined />}
+              loading={loadingStats}
             />
-          </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Validés Professeur"
+              value={stats.is_validated_by_professor || 0}
+              prefix={<CheckCircleOutlined style={{ color: colors.status.success }} />}
+              loading={loadingStats}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Validés Admin"
+              value={stats.is_validated_by_admin || 0}
+              prefix={<CheckCircleOutlined style={{ color: colors.primary.main }} />}
+              loading={loadingStats}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="En attente"
+              value={stats.pending || 0}
+              prefix={<ClockCircleOutlined style={{ color: colors.status.warning }} />}
+              loading={loadingStats}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Filtres et actions */}
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Row gutter={[16, 16]} align="middle">
           
-          <div className="filters-bar">
+          <Col xs={24} sm={12} md={4}>
             <Select
-              placeholder="Filtrer par Professeur"
-              value={filters.professeur}
-              onChange={(value) => updateFilters('professeur', value)}
-              style={{ width: 250 }}
+              placeholder="Professeur"
               allowClear
-              showSearch
-              optionFilterProp="children"
+              value={filters.professeur}
+              onChange={(value) => {
+                setFilters({...filters, professeur: value});
+              }}
+              style={{ width: "100%" }}
             >
               {professeurs.map((prof) => (
-                <Select.Option key={prof.id} value={prof.id}>
+                <Option key={prof.id} value={prof.id}>
                   {prof.first_name} {prof.last_name}
-                </Select.Option>
+                </Option>
               ))}
             </Select>
+          </Col>
 
+          <Col xs={24} sm={12} md={4}>
             <Select
-              mode="multiple"
-              placeholder="Filtrer par Module"
-              value={filters.modules}
-              onChange={(values) => updateFilters('modules', values)}
-              style={{ width: 300 }}
+              placeholder="État"
               allowClear
-              disabled={!filters.professeur}
-              maxTagCount={2}
-            >
-              {modulesProf.map((module) => (
-                <Select.Option key={module.id} value={module.id}>
-                  {module.name}
-                </Select.Option>
-              ))}
-            </Select>
-
-            <Select
-              placeholder="État de validation"
               value={filters.validationStatus}
-              onChange={(value) => updateFilters('validationStatus', value)}
-              style={{ width: 250 }}
-              allowClear
-              optionLabelProp="label"
-              className="validation-select"
-              dropdownStyle={{ padding: '8px' }}
+              onChange={(value) => setFilters({...filters, validationStatus: value})}
+              style={{ width: "100%" }}
             >
-              {validationOptions.map((option) => (
-                <Select.Option 
-                  key={option.value} 
-                  value={option.value}
-                  label={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {option.icon}
-                      {option.label}
-                    </div>
-                  }
-                >
-                  <div
-                    className="validation-option"
-                    style={{
-                      padding: '8px 12px',
-                      margin: '-4px -8px',
-                      borderRadius: '6px',
-                      backgroundColor: option.color,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px',
-                      marginBottom: '4px'
-                    }}>
-                      {option.icon}
-                      <span style={{ fontWeight: 500 }}>{option.label}</span>
-                    </div>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: '#666',
-                      marginLeft: '24px'
-                    }}>
-                      {option.description}
-                    </div>
-                  </div>
-                </Select.Option>
-              ))}
+              <Option value="pending_professor">Non effectués</Option>
+              <Option value="pending_admin">En attente Admin</Option>
+              <Option value="validated_admin">Validés Admin</Option>
             </Select>
+          </Col>
 
-            {(filters.search || filters.professeur || filters.modules.length > 0 || filters.validationStatus) && (
-              <button 
-                className="filter-button reset"
-                onClick={resetFilters}
+          <Col xs={24} md={4}>
+            <RangePicker
+              value={filters.dateRange}
+              onChange={(dates) => setFilters({...filters, dateRange: dates})}
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+            />
+          </Col>
+
+          <Col xs={24} md={4}>
+            <Space>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openModal}
               >
-                <FaTimes style={{ marginRight: '5px' }} />
-                Réinitialiser les filtres
-              </button>
-            )}
-          </div>
+                Ajouter
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={exportToCSV}
+              >
+                Export
+              </Button>
+              {(filters.search || filters.professeur || filters.validationStatus || filters.dateRange) && (
+                <Button
+                  icon={<ClearOutlined />}
+                  onClick={resetFilters}
+                >
+                  Réinitialiser
+                </Button>
+              )}
+            </Space>
+          </Col>
+        </Row>
+      </Card>
 
-          {filteredCours.length === 0 ? (
-            <div className="no-results">
-              <p>Aucun cours ne correspond aux critères de recherche</p>
-            </div>
-          ) : (
-            <div className="filter-summary">
-              {filteredCours.length} cours trouvé{filteredCours.length > 1 ? 's' : ''}
-            </div>
-          )}
-        </div>
+      {/* Tableau */}
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={filteredPlannings}
+          rowKey="id"
+          loading={loadingList}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) =>
+              `${range[0]}-${range[1]} sur ${total} plannings`,
+          }}
+          scroll={{ x: 800 }}
+        />
+      </Card>
 
-        <div className="actions">
-          <button onClick={openModal} className="add-button">
-            <FaPlus /> Ajouter un Cours
-          </button>
-          <button onClick={exportToCSV} className="csv-button">
-            📄 Exporter en CSV
-          </button>
+      {/* Modal */}
+      <Modal
+        title={editMode ? "Modifier le planning" : "Ajouter un planning"}
+        open={isModalOpen}
+        onCancel={closeModal}
+        footer={null}
+        destroyOnClose
+        width={600}
+      >
+        <Spin spinning={loadingSubmit} tip="Enregistrement en cours...">
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            preserve={false}
+          >
+            <Form.Item
+              label="Professeur"
+              name="user"
+              rules={[{ required: true, message: "Sélectionnez un professeur" }]}
+            >
+              <Select
+                placeholder="Sélectionner un professeur"
+                showSearch
+                optionFilterProp="children"
+                onChange={(value) => {
+                  form.setFieldValue('horaire', null);
+                }}
+              >
+                {professeurs.map((prof) => (
+                  <Option key={prof.id} value={prof.id}>
+                    {prof.first_name} {prof.last_name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
 
-        </div>
-
-        <div className="cours-table">
-          {isLoading ? (
-            <div className="spinner-container">
-              <Spin size="large" tip="Chargement des plannings..." />
-            </div>
-          ) : (
-            <>
-              <div className="table-header">
-                <div className="header-cell">Professeur</div>
-                <div className="header-cell">Module</div>
-                <div className="header-cell">Date</div>
-                <div className="header-cell">Horaire</div>
-                <div className="header-cell">Statut</div>
-                <div className="header-cell">Validation</div>
-              </div>
-
-              {currentItems.map((c) => (
-                <div key={c.id} className="table-row">
-                  <div className="row-cell">
-                    {c.user_details ? `${c.user_details.first_name} ${c.user_details.last_name}` : "Inconnu"}
-                  </div>
-                  <div className="row-cell">
-                    {c.module_details ? (
-                      <div>
-                        <div>{c.module_details.name}</div>
-                        <small style={{ color: '#666' }}>
-                          {c.module_details.classe_details?.name || ""}
-                        </small>
+            <Form.Item
+              label="Horaire"
+              name="horaire"
+              rules={[{ required: true, message: "Sélectionnez un horaire" }]}
+            >
+              <Select
+                placeholder="Sélectionner un horaire"
+                loading={loadingHoraires}
+                disabled={!form.getFieldValue('user')}
+                optionLabelProp="label"
+              >
+                {horaires.map((horaire) => (
+                  <Option 
+                    key={horaire.id} 
+                    value={horaire.id}
+                    label={`${horaire.jours} ${horaire.time_start_course?.slice(0, 5)} - ${horaire.time_end_course?.slice(0, 5)}`}
+                  >
+                    <div>
+                      <div>{horaire.jours} {horaire.time_start_course?.slice(0, 5)} - {horaire.time_end_course?.slice(0, 5)}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Salle: {horaire.salle} • {horaire.module_details?.name}
                       </div>
-                    ) : "Inconnu"}
-                  </div>
-                  <div className="row-cell">{dayjs(c.date).format('DD/MM/YYYY')}</div>
-                  <div className="row-cell">
-                    {c.horaire_details ? (
-                      <>
-                        {c.horaire_details.time_start_course.slice(0, 5)} - {c.horaire_details.time_end_course.slice(0, 5)}
-                        <br />
-                        <small style={{ color: '#666' }}>
-                          {c.horaire_details.jours} - Salle: {c.horaire_details.salle}
-                        </small>
-                      </>
-                    ) : "Horaire non défini"}
-                  </div>
-                  <div className="row-cell">
-                    {c.his_state ? (
-                      <span style={{ color: '#28a745', fontWeight: 600 }}>✅ Effectué</span>
-                    ) : (
-                      <span style={{ color: '#dc3545', fontWeight: 600 }}>🔴 Non effectué</span>
-                    )}
-                  </div>
-                  <div className="row-cell">
-                    <ValidationButton cours={c} />
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
+                    </div>
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
 
-        {/* Pagination */}
-        <div className="pagination">
-          <Button onClick={prevPage} disabled={currentPage === 1}>
-            ◀ Précédent
-          </Button>
-          <span>Page {currentPage} sur {totalPages}</span>
-          <Button onClick={nextPage} disabled={currentPage === totalPages}>
-            Suivant ▶
-          </Button>
-        </div>
-
-        <Modal
-          title="Ajouter un Cours"
-          open={isModalOpen}
-          onCancel={closeModal}
-          footer={null}
-        >
-          <Spin spinning={isSaving} tip="Enregistrement en cours...">
-            <Form layout="vertical">
-              <Form.Item label="Professeur" rules={[{ required: true }]}>
-                <Select 
-                  placeholder="Sélectionner un professeur" 
-                  value={newCour.user}
-                  onChange={(value) => {
-                    setNewCour({ ...newCour, user: value });
-                    fetchModulesByProfesseur(value);
-                  }}
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="Date de début"
+                  name="date"
+                  rules={[{ required: true, message: "Sélectionnez une date" }]}
                 >
-                  {professeurs.map((prof) => (
-                    <Option key={prof.id} value={prof.id}>
-                      {prof.first_name} {prof.last_name} - {prof.email}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    format="DD/MM/YYYY"
+                    disabledDate={(current) => current && current < dayjs().startOf('day')}
+                  />
+                </Form.Item>
+              </Col>
+              
+              {!editMode && (
+                <Col span={12}>
+                  <Form.Item
+                    label="Durée (semaines)"
+                    name="duration"
+                    initialValue={1}
+                    rules={[{ required: true, message: "Spécifiez la durée" }]}
+                  >
+                    <InputNumber
+                      min={1}
+                      max={52}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Col>
+              )}
+            </Row>
 
-              <Form.Item label="Module" rules={[{ required: true }]}>
-                <Select 
-                  value={newCour.module} 
-                  placeholder="Sélectionner un module"
-                  disabled={!newCour.user}
-                  loading={isLoadingModules}
-                  onChange={(value) => {
-                    setNewCour({ ...newCour, module: value });
-                    fetchHorairesByModule(value);
-                  }}
+            <Form.Item>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: spacing.md }}>
+                <Button onClick={closeModal} disabled={loadingSubmit}>
+                  Annuler
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loadingSubmit}
                 >
-                  {modulesProf.map((module) => (
-                    <Option key={module.id} value={module.id}>{module.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Form.Item label="Horaire" rules={[{ required: true }]}>
-                <Select
-                  value={newCour.horaire}
-                  placeholder="Sélectionner un horaire"
-                  disabled={!newCour.module}
-                  loading={isLoadingHoraires}
-                  style={{ width: '100%' }}
-                  optionLabelProp="label"
-                  onChange={(value) => {
-                    const horaire = horaires.find(h => h.id === value);
-                    setNewCour({ ...newCour, horaire: value });
-                    setSelectedDay(horaire?.jours);
-                  }}
-                >
-                  {horaires.map((horaire) => (
-                    <Option 
-                      key={horaire.id} 
-                      value={horaire.id}
-                      label={`${horaire.jours} ${horaire.time_start_course.slice(0, 5)} - ${horaire.time_end_course.slice(0, 5)}`}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontWeight: 500 }}>
-                          {horaire.jours} {horaire.time_start_course.slice(0, 5)} - {horaire.time_end_course.slice(0, 5)}
-                        </div>
-                        <div style={{ 
-                          fontSize: '12px', 
-                          color: '#666',
-                          whiteSpace: 'normal',
-                          lineHeight: '1.2'
-                        }}>
-                          Salle: {horaire.salle}
-                          {horaire.module_details?.classe_details?.name && 
-                            ` • ${horaire.module_details.classe_details.name}`}
-                        </div>
-                      </div>
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Form.Item label="Durée (en semaines)" rules={[{ required: true }]}>
-                <InputNumber
-                  min={1}
-                  max={52}
-                  value={duration}
-                  onChange={(value) => setDuration(value)}
-                />
-              </Form.Item>
-
-              <div className="modal-buttons">
-                <button type="button" onClick={closeModal} disabled={isSaving}>Annuler</button>
-                <button type="button" onClick={saveCour} disabled={isSaving}>
-                  {isSaving ? "Ajout en cours..." : "Ajouter"}
-                </button>
+                  {editMode ? "Modifier" : "Ajouter"}
+                </Button>
               </div>
-            </Form>
-          </Spin>
-        </Modal>
-      </div>
+            </Form.Item>
+          </Form>
+        </Spin>
+      </Modal>
     </div>
   );
 };
 
+export default Planning;

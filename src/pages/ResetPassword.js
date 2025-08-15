@@ -1,18 +1,22 @@
+// src/pages/ResetPassword.js
+// Page de réinitialisation de mot de passe avec lien reçu par email
+
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { Form, Input, Button, Card, Alert, message } from "antd";
-import { MailOutlined, ArrowLeftOutlined, LoadingOutlined } from "@ant-design/icons";
+import { LockOutlined, ArrowLeftOutlined, LoadingOutlined, EyeOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 import authService from "../services/authService";
 import { colors, spacing, typography } from "../utils/styles/designTokens";
 
-const ForgotPassword = () => {
+const ResetPassword = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { uidb64, token } = useParams(); // Récupérer les paramètres de l'URL
 
-  // Verrouiller le scroll de la page comme pour Login
+  // Verrouiller le scroll de la page
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     document.body.style.height = '100vh';
@@ -33,10 +37,25 @@ const ForgotPassword = () => {
     };
   }, []);
 
+  // Vérifier si les paramètres sont présents
+  useEffect(() => {
+    if (!uidb64 || !token) {
+      setError('Lien de réinitialisation invalide ou incomplet.');
+    }
+  }, [uidb64, token]);
+
   const handleFormChange = () => {
     if (error) {
       setError('');
     }
+  };
+
+  const validatePassword = (password) => {
+    // Validation basique : au moins 8 caractères
+    if (password.length < 8) {
+      return false;
+    }
+    return true;
   };
 
   const onFinish = async (values) => {
@@ -44,34 +63,44 @@ const ForgotPassword = () => {
     setError('');
     setSuccess(false);
 
+    // Validation côté client
+    if (!validatePassword(values.password)) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      setLoading(false);
+      return;
+    }
+
+    if (values.password !== values.confirmPassword) {
+      setError('Les mots de passe ne correspondent pas.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await authService.forgotPassword(values.email);
+      const result = await authService.resetPassword(uidb64, token, values.password);
       
       if (result.success) {
         setSuccess(true);
         message.success(result.message);
         form.resetFields();
+        
+        // Redirection vers la page de connexion après 3 secondes
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
       } else {
         setError(result.error);
-        // Préserver l'email en cas d'erreur
-        form.setFieldsValue({
-          email: values.email
-        });
       }
       
     } catch (error) {
-      console.error('Forgot password error:', error);
+      console.error('Reset password error:', error);
       setError('Une erreur est survenue. Veuillez réessayer.');
-      // Préserver l'email en cas d'erreur
-      form.setFieldsValue({
-        email: values.email
-      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Styles similaires à la page Login pour la cohérence
+  // Styles similaires aux autres pages d'authentification
   const containerStyle = {
     position: 'fixed',
     top: 0,
@@ -131,7 +160,7 @@ const ForgotPassword = () => {
     <div style={containerStyle}>
       <Card style={cardStyle}>
         <div style={{ padding: spacing.xl }}>
-          <h1 style={titleStyle}>Mot de passe oublié</h1>
+          <h1 style={titleStyle}>Nouveau mot de passe</h1>
           
           <p style={{ 
             textAlign: 'center', 
@@ -139,7 +168,7 @@ const ForgotPassword = () => {
             color: colors.text.secondary,
             fontSize: typography.fontSize.base 
           }}>
-            Entrez votre adresse e-mail et nous vous enverrons un lien pour réinitialiser votre mot de passe.
+            Choisissez un nouveau mot de passe sécurisé pour votre compte.
           </p>
 
           {error && (
@@ -153,8 +182,8 @@ const ForgotPassword = () => {
 
           {success && (
             <Alert
-              message="Email envoyé !"
-              description="Si cette adresse e-mail existe dans notre système, vous recevrez un lien de réinitialisation dans quelques minutes."
+              message="Mot de passe réinitialisé !"
+              description="Votre mot de passe a été modifié avec succès. Redirection vers la page de connexion..."
               type="success"
               showIcon
               style={{ marginBottom: spacing.md }}
@@ -163,7 +192,7 @@ const ForgotPassword = () => {
 
           <Form
             form={form}
-            name="forgotPassword"
+            name="resetPassword"
             onFinish={onFinish}
             onValuesChange={handleFormChange}
             layout="vertical"
@@ -174,24 +203,53 @@ const ForgotPassword = () => {
             }}
           >
             <Form.Item
-              name="email"
-              label="Adresse e-mail"
+              name="password"
+              label="Nouveau mot de passe"
               rules={[
                 {
                   required: true,
-                  message: 'Veuillez entrer votre adresse e-mail'
+                  message: 'Veuillez entrer votre nouveau mot de passe'
                 },
                 {
-                  type: 'email',
-                  message: 'Veuillez entrer une adresse e-mail valide'
+                  min: 8,
+                  message: 'Le mot de passe doit contenir au moins 8 caractères'
                 }
               ]}
             >
-              <Input
-                prefix={<MailOutlined style={{ color: colors.primary.main }} />}
-                placeholder="votre@email.com"
-                autoComplete="email"
+              <Input.Password
+                prefix={<LockOutlined style={{ color: colors.primary.main }} />}
+                placeholder="Votre nouveau mot de passe"
+                autoComplete="new-password"
                 style={inputStyle}
+                iconRender={(visible) => (visible ? <EyeOutlined /> : <EyeInvisibleOutlined />)}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="confirmPassword"
+              label="Confirmer le mot de passe"
+              dependencies={['password']}
+              rules={[
+                {
+                  required: true,
+                  message: 'Veuillez confirmer votre mot de passe'
+                },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('Les mots de passe ne correspondent pas'));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password
+                prefix={<LockOutlined style={{ color: colors.primary.main }} />}
+                placeholder="Confirmez votre mot de passe"
+                autoComplete="new-password"
+                style={inputStyle}
+                iconRender={(visible) => (visible ? <EyeOutlined /> : <EyeInvisibleOutlined />)}
               />
             </Form.Item>
 
@@ -200,11 +258,12 @@ const ForgotPassword = () => {
                 type="primary"
                 htmlType="submit"
                 loading={loading}
+                disabled={success || (!uidb64 || !token)}
                 style={buttonStyle}
                 block
-                icon={loading ? <LoadingOutlined /> : <MailOutlined />}
+                icon={loading ? <LoadingOutlined /> : <LockOutlined />}
               >
-                {loading ? 'Envoi en cours...' : 'Envoyer le lien'}
+                {loading ? 'Réinitialisation...' : 'Réinitialiser le mot de passe'}
               </Button>
             </Form.Item>
 
@@ -224,4 +283,4 @@ const ForgotPassword = () => {
   );
 };
 
-export default ForgotPassword;
+export default ResetPassword;

@@ -11,13 +11,25 @@ import {
   Col,
   Typography,
   message,
-  Spin
+  Spin,
+  Table,
+  Popconfirm
 } from "antd";
 import dayjs from "dayjs";
-import { PlusOutlined, BookOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  BookOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  SearchOutlined,
+  TeamOutlined,
+  CalendarOutlined
+} from "@ant-design/icons";
 
-import { FaBook, FaPlus, FaChalkboardTeacher } from "react-icons/fa";
-import axios from "../utils/axiosInstance";
+import moduleService from "../services/moduleService";
+import filiereService from "../services/filiereService";
+import classeService from "../services/classeService";
+import { styles, colors, typography, spacing, borderRadius, shadows } from "../utils/styles/designTokens";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -26,24 +38,77 @@ const Modules = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingList, setLoadingList] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-
-  const [selectedModule, setSelectedModule] = useState(null); // module à modifier
-  const [isEditing, setIsEditing] = useState(false); // mode édition
+  const [selectedModule, setSelectedModule] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [modules, setModules] = useState([]);
   const [filieres, setFilieres] = useState([]);
   const [classes, setClasses] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' ou 'table'
   const [form] = Form.useForm();
 
   const sessions = ["S1", "S2", "S3", "S4", "S5", "S6"];
 
   useEffect(() => {
-    list_modules();
-    list_filieres();
-    list_classes();
+    fetchModules();
+    fetchFilieres();
+    fetchClasses();
   }, []);
 
-  const openModal = () => setIsModalOpen(true);
+  // Fonctions de récupération des données avec le service
+  const fetchModules = async () => {
+    setLoadingList(true);
+    try {
+      const res = await moduleService.getAllModules();
+      if (res.success) {
+        setModules(res.data);
+      } else {
+        message.error(res.error || "Erreur lors du chargement des modules");
+        setModules([]);
+      }
+    } catch (error) {
+      console.error("Erreur fetchModules:", error);
+      message.error("Erreur serveur lors du chargement");
+      setModules([]);
+    }
+    setLoadingList(false);
+  };
+
+  const fetchFilieres = async () => {
+    try {
+      const res = await filiereService.getAllFilieres();
+      if (res.success) {
+        setFilieres(res.data);
+      } else {
+        setFilieres([]);
+      }
+    } catch (error) {
+      console.error("Erreur fetchFilieres:", error);
+      setFilieres([]);
+    }
+  };
+
+  const fetchClasses = async () => {
+    try {
+      const res = await classeService.getAllClasses();
+      if (res.success) {
+        setClasses(res.data);
+      } else {
+        setClasses([]);
+      }
+    } catch (error) {
+      console.error("Erreur fetchClasses:", error);
+      setClasses([]);
+    }
+  };
+
+  // Gestion des modales
+  const openModal = () => {
+    setIsModalOpen(true);
+    setIsEditing(false);
+    setSelectedModule(null);
+    form.resetFields();
+  };
 
   const closeModal = () => {
     form.resetFields();
@@ -55,7 +120,7 @@ const Modules = () => {
   const openEditModal = (mod) => {
     setIsEditing(true);
     setSelectedModule(mod);
-  
+    
     form.setFieldsValue({
       ...mod,
       start_date: mod.start_date ? dayjs(mod.start_date) : null,
@@ -63,45 +128,14 @@ const Modules = () => {
       classe: mod.classe,
       filieres: mod.filieres || [],
     });
-  
+    
     setIsModalOpen(true);
   };
 
-  const list_modules = () => {
-    setLoadingList(true);
-    axios.get("modules").then(
-      (res) => {
-        setModules(res.data);
-        setLoadingList(false);
-      },
-      () => {
-        setModules([]);
-        setLoadingList(false);
-      }
-    );
-  };
-
-  const list_filieres = () => {
-    axios.get("filieres").then(
-      (res) => setFilieres(res.data),
-      () => setFilieres([])
-    );
-  };
-
-  const list_classes = () => {
-    axios.get("classes").then(
-      (res) => setClasses(res.data),
-      () => setClasses([])
-    );
-  };
-
-  const handleSearch = (e) => setSearchQuery(e.target.value);
-
-  const handleSubmitModule = async () => {
+  // Soumission du formulaire
+  const handleSubmitModule = async (values) => {
+    setLoadingSubmit(true);
     try {
-      setLoadingSubmit(true);
-      const values = await form.validateFields();
-
       if (values.start_date.isAfter(values.end_date)) {
         message.error("La date de début doit être avant la date de fin.");
         setLoadingSubmit(false);
@@ -114,184 +148,441 @@ const Modules = () => {
         end_date: values.end_date.format("YYYY-MM-DD"),
       };
 
+      let res;
       if (isEditing) {
-        await axios.put(`modules/${selectedModule.id}`, formattedModule);
-        message.success("Module modifié avec succès !");
+        res = await moduleService.updateModule(selectedModule.id, formattedModule);
       } else {
-        await axios.post("modules", formattedModule);
-        message.success("Module ajouté avec succès !");
+        res = await moduleService.createModule(formattedModule);
       }
 
-      list_modules();
-      closeModal();
-    } catch (err) {
-      console.error("Erreur dans le formulaire ou envoi :", err);
-      message.error(err.response?.data?.message || "Erreur lors de l'enregistrement du module.");
+      if (res.success) {
+        message.success(isEditing ? "Module modifié avec succès !" : "Module ajouté avec succès !");
+        fetchModules();
+        closeModal();
+      } else {
+        message.error(res.error || "Erreur lors de l'enregistrement du module");
+      }
+    } catch (error) {
+      console.error("Erreur handleSubmitModule:", error);
+      message.error("Erreur lors de l'enregistrement du module");
     } finally {
       setLoadingSubmit(false);
     }
   };
 
-  // Supprimer un module
-  const handleDeleteModule = (id) => {
-    const isConfirmed = window.confirm("Êtes-vous sûr de vouloir supprimer ce module ?");
-    if (isConfirmed) {
-      axios.delete("modules/"+id).then(
-        () => {
-          message.success("Module supprimé avec succès !");
-          list_modules();
-        },
-        () => {
-          message.error("Erreur lors de la suppression du module.");
-        }
-      );
+  // Suppression d'un module
+  const handleDeleteModule = async (id) => {
+    setLoadingList(true);
+    try {
+      const res = await moduleService.deleteModule(id);
+      if (res.success) {
+        message.success("Module supprimé avec succès !");
+        fetchModules();
+      } else {
+        message.error(res.error || "Erreur lors de la suppression du module");
+      }
+    } catch (error) {
+      console.error("Erreur handleDeleteModule:", error);
+      message.error("Erreur lors de la suppression du module");
     }
-    else {
-      message.info("Suppression annulée.");
-    }
+    setLoadingList(false);
   };
-  
+
+  // Filtrage des modules
   const filteredModules = modules.filter((mod) =>
-    mod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    mod.session.toLowerCase().includes(searchQuery.toLowerCase())
+    mod.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    mod.session?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    mod.classe_details?.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Colonnes pour la vue tableau
+  const columns = [
+    {
+      title: "Nom",
+      dataIndex: "name",
+      key: "name",
+      sorter: (a, b) => a.name?.localeCompare(b.name),
+      render: (text) => (
+        <span style={{ fontWeight: typography.fontWeight.semibold, color: colors.primary.main }}>
+          <BookOutlined style={{ marginRight: spacing.xs }} />
+          {text}
+        </span>
+      ),
+    },
+    {
+      title: "Classe",
+      dataIndex: ["classe_details", "name"],
+      key: "classe",
+      render: (text) => (
+        <span style={{ color: colors.text.secondary }}>
+          <TeamOutlined style={{ marginRight: spacing.xs }} />
+          {text || "-"}
+        </span>
+      ),
+    },
+    {
+      title: "Session",
+      dataIndex: "session",
+      key: "session",
+      sorter: (a, b) => a.session?.localeCompare(b.session),
+      render: (text) => (
+        <span style={{
+          ...styles.statusBadge,
+          backgroundColor: colors.primary.main + "20",
+          color: colors.primary.main,
+          border: `1px solid ${colors.primary.main}40`,
+        }}>
+          {text}
+        </span>
+      ),
+    },
+    {
+      title: "Filières",
+      dataIndex: "filieres_details",
+      key: "filieres",
+      render: (filieres) => (
+        <span style={{ color: colors.text.secondary }}>
+          {filieres?.map(f => f.name).join(", ") || "Aucune"}
+        </span>
+      ),
+    },
+    {
+      title: "Dates",
+      key: "dates",
+      render: (_, record) => (
+        <div style={{ fontSize: typography.fontSize.sm, color: colors.text.secondary }}>
+          <div><CalendarOutlined /> {record.start_date}</div>
+          <div style={{ marginTop: 2 }}>au {record.end_date}</div>
+        </div>
+      ),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 130,
+      render: (_, record) => (
+        <div style={{ display: "flex", justifyContent: "center", gap: spacing.sm }}>
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            size="small"
+            onClick={() => openEditModal(record)}
+            style={{
+              backgroundColor: colors.primary.main,
+              borderColor: colors.primary.main,
+              borderRadius: borderRadius.sm,
+            }}
+          />
+          <Popconfirm
+            title="Voulez-vous supprimer ce module ?"
+            onConfirm={() => handleDeleteModule(record.id)}
+            okText="Oui"
+            cancelText="Non"
+          >
+            <Button
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              style={{ borderRadius: borderRadius.sm }}
+            />
+          </Popconfirm>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="modules-page">
-      <h1>Gestion des Modules 📚</h1>
-      <div className="modules-container">
-        {/* Search Bar */}
-        <div className="search-bar">
-          <input type="text" placeholder="Rechercher par module, professeur, filière ou session..." value={searchQuery} onChange={handleSearch} />
-          <span className="search-icon">🔍</span>
+    <div style={styles.pageContainer}>
+      <h1 style={styles.pageTitle}>Gestion des Modules 📚</h1>
+
+      {/* Barre de recherche + actions */}
+      <div style={{
+        marginBottom: spacing.lg,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: spacing.sm,
+      }}>
+        <Input.Search
+          placeholder="Rechercher par module, classe ou session..."
+          allowClear
+          enterButton={<SearchOutlined />}
+          size="large"
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ maxWidth: 400, borderRadius: borderRadius.sm }}
+          value={searchQuery}
+        />
+        <div style={{ display: "flex", gap: spacing.sm }}>
+          <Button.Group>
+            <Button
+              type={viewMode === 'cards' ? 'primary' : 'default'}
+              onClick={() => setViewMode('cards')}
+              style={{ borderRadius: `${borderRadius.sm} 0 0 ${borderRadius.sm}` }}
+            >
+              Cards
+            </Button>
+            <Button
+              type={viewMode === 'table' ? 'primary' : 'default'}
+              onClick={() => setViewMode('table')}
+              style={{ borderRadius: `0 ${borderRadius.sm} ${borderRadius.sm} 0` }}
+            >
+              Tableau
+            </Button>
+          </Button.Group>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            size="large"
+            onClick={openModal}
+            style={{ borderRadius: borderRadius.sm }}
+          >
+            Ajouter un Module
+          </Button>
         </div>
-
-        {/* Action Button */}
-        <div className="actions">
-          <button onClick={openModal} className="add-button">
-            <FaPlus /> Ajouter un Module
-          </button>
-        </div>
-
-        {loadingList ? (
-          <div className="spinner-container">
-            <Spin size="large" tip="Chargement des modules..." />
-          </div>
-        ) : (
-          <Row gutter={[20, 20]} justify="center" className="modules-grid">
-            {filteredModules.slice().reverse().map((mod) => (
-              <Col key={mod.id}>
-                <Card
-                  onClick={() => openEditModal(mod)}
-                  className="module-card"
-                  style={{
-                    width: 250,
-                    position: "relative",
-                  }}
-                >
-                  {/* Supprimer */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 10,
-                      right: 10,
-                      zIndex: 1,
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <DeleteOutlined
-                      onClick={() => handleDeleteModule(mod.id)}
-                      style={{
-                        fontSize: 18,
-                        color: "#ff4d4f",
-                        cursor: "pointer",
-                      }}
-                    />
-                  </div>
-
-                  <FaBook className="module-icon" />
-                  <h3>{mod.name}</h3>
-                  <p><FaChalkboardTeacher /> <strong>Classe:</strong> {mod.classe_details?.name}</p>
-                  <p><strong>Session:</strong> {mod.session}</p>
-                  <p><strong>Filières:</strong> {mod.filieres_details?.map((f) => f.name).join(", ") || "Aucune"}</p>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        )}
-
-        <Modal
-          title={isEditing ? "Modifier un Module" : "Ajouter un Module"}
-          open={isModalOpen}
-          onCancel={closeModal}
-          okText={isEditing ? "Modifier" : "Ajouter"}
-          cancelText="Annuler"
-          footer={null}
-        >
-          <Spin spinning={loadingSubmit} tip="Enregistrement en cours...">
-            <Form form={form} layout="vertical">
-              <Form.Item name="name" label="Nom" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-
-              <Form.Item name="description" label="Description">
-                <Input />
-              </Form.Item>
-
-              <Form.Item name="start_date" label="Date de début" rules={[{ required: true }]}>
-                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} />
-              </Form.Item>
-
-              <Form.Item name="end_date" label="Date de fin" rules={[{ required: true }]}>
-                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} />
-              </Form.Item>
-
-              <Form.Item name="classe" label="Classe" rules={[{ required: true }]}>
-                <Select placeholder="Sélectionner une classe">
-                  {classes.map((classe) => (
-                    <Option key={classe.id} value={classe.id}>{classe.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Form.Item name="filieres" label="Filières" rules={[{ required: true }]}>
-                <Select
-                  mode="multiple"
-                  placeholder="Sélectionner une ou plusieurs filières"
-                >
-                  {filieres.map((filiere) => (
-                    <Option key={filiere.id} value={filiere.id}>{filiere.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Form.Item name="session" label="Session" rules={[{ required: true }]}>
-                <Select placeholder="Sélectionner une session">
-                  {sessions.map((session) => (
-                    <Option key={session} value={session}>{session}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              {/* Boutons personnalisés */}
-              <div className="modal-buttons">
-                <button type="button" onClick={closeModal} disabled={loadingSubmit}>Annuler</button>
-                <button
-                  type="button"
-                  onClick={handleSubmitModule}
-                  disabled={loadingSubmit}
-                >
-                  {loadingSubmit ? (
-                    <Spin size="small" style={{ color: "white" }} />
-                  ) : (
-                    isEditing ? "Enregistrer les modifications" : "Ajouter"
-                  )}
-                </button>
-              </div>
-            </Form>
-          </Spin>
-        </Modal>
       </div>
+
+      {/* Contenu principal */}
+      {loadingList ? (
+        <div style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: spacing["2xl"],
+        }}>
+          <Spin size="large" tip="Chargement des modules..." />
+        </div>
+      ) : (
+        <>
+          {viewMode === 'cards' ? (
+            <Row gutter={[20, 20]} justify="start">
+              {filteredModules.slice().reverse().map((mod) => (
+                <Col key={mod.id} xs={24} sm={12} md={8} lg={6}>
+                  <Card
+                    hoverable
+                    onClick={() => openEditModal(mod)}
+                    style={{
+                      ...styles.card,
+                      borderRadius: borderRadius.md,
+                      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                      cursor: 'pointer',
+                    }}
+                    bodyStyle={{ padding: spacing.md }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = shadows.lg;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = shadows.base;
+                    }}
+                    actions={[
+                      <EditOutlined key="edit" onClick={(e) => { e.stopPropagation(); openEditModal(mod); }} />,
+                      <Popconfirm
+                        key="delete"
+                        title="Voulez-vous supprimer ce module ?"
+                        onConfirm={(e) => { e?.stopPropagation(); handleDeleteModule(mod.id); }}
+                        okText="Oui"
+                        cancelText="Non"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DeleteOutlined style={{ color: colors.status.error }} />
+                      </Popconfirm>
+                    ]}
+                  >
+                    <div style={{ textAlign: 'center', marginBottom: spacing.md }}>
+                      <BookOutlined style={{ 
+                        fontSize: typography.fontSize['2xl'], 
+                        color: colors.primary.main,
+                        marginBottom: spacing.sm 
+                      }} />
+                      <Title level={4} style={{ 
+                        margin: 0, 
+                        color: colors.text.primary,
+                        fontSize: typography.fontSize.lg 
+                      }}>
+                        {mod.name}
+                      </Title>
+                    </div>
+                    
+                    <div style={{ marginBottom: spacing.xs }}>
+                      <TeamOutlined style={{ marginRight: spacing.xs, color: colors.primary.main }} />
+                      <Text strong>Classe: </Text>
+                      <Text style={{ color: colors.text.secondary }}>
+                        {mod.classe_details?.name || "Non assignée"}
+                      </Text>
+                    </div>
+                    
+                    <div style={{ marginBottom: spacing.xs }}>
+                      <CalendarOutlined style={{ marginRight: spacing.xs, color: colors.primary.main }} />
+                      <Text strong>Session: </Text>
+                      <span style={{
+                        ...styles.statusBadge,
+                        backgroundColor: colors.primary.main + "20",
+                        color: colors.primary.main,
+                        border: `1px solid ${colors.primary.main}40`,
+                        fontSize: typography.fontSize.xs,
+                        padding: `${spacing.xs} ${spacing.sm}`,
+                      }}>
+                        {mod.session}
+                      </span>
+                    </div>
+                    
+                    <div style={{ marginTop: spacing.sm }}>
+                      <Text strong style={{ color: colors.text.primary }}>Filières: </Text>
+                      <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
+                        {mod.filieres_details?.map((f) => f.name).join(", ") || "Aucune"}
+                      </Text>
+                    </div>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={filteredModules}
+              rowKey="id"
+              loading={loadingList}
+              pagination={{ pageSize: 10 }}
+              bordered
+              style={{ 
+                boxShadow: shadows.base, 
+                borderRadius: borderRadius.md,
+                backgroundColor: colors.secondary.white 
+              }}
+            />
+          )}
+        </>
+      )}
+
+      {/* Modal d'ajout/modification */}
+      <Modal
+        title={
+          <span style={{ color: colors.primary.main, fontWeight: typography.fontWeight.semibold }}>
+            <BookOutlined style={{ marginRight: spacing.xs }} />
+            {isEditing ? "Modifier un Module" : "Ajouter un Module"}
+          </span>
+        }
+        open={isModalOpen}
+        onCancel={closeModal}
+        footer={null}
+        destroyOnClose
+        centered
+        width={600}
+      >
+        <Spin spinning={loadingSubmit} tip="Enregistrement en cours...">
+          <Form 
+            form={form} 
+            layout="vertical" 
+            onFinish={handleSubmitModule}
+            preserve={false}
+          >
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  name="name" 
+                  label="Nom du module" 
+                  rules={[{ required: true, message: "Ce champ est requis" }]}
+                >
+                  <Input placeholder="Ex: Mathématiques" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  name="session" 
+                  label="Session" 
+                  rules={[{ required: true, message: "Ce champ est requis" }]}
+                >
+                  <Select placeholder="Sélectionner une session">
+                    {sessions.map((session) => (
+                      <Option key={session} value={session}>{session}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item name="description" label="Description">
+              <Input.TextArea rows={3} placeholder="Description du module" />
+            </Form.Item>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  name="start_date" 
+                  label="Date de début" 
+                  rules={[{ required: true, message: "Ce champ est requis" }]}
+                >
+                  <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  name="end_date" 
+                  label="Date de fin" 
+                  rules={[{ required: true, message: "Ce champ est requis" }]}
+                >
+                  <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  name="classe" 
+                  label="Classe" 
+                  rules={[{ required: true, message: "Ce champ est requis" }]}
+                >
+                  <Select placeholder="Sélectionner une classe">
+                    {classes.map((classe) => (
+                      <Option key={classe.id} value={classe.id}>{classe.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  name="filieres" 
+                  label="Filières" 
+                  rules={[{ required: true, message: "Ce champ est requis" }]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="Sélectionner une ou plusieurs filières"
+                  >
+                    {filieres.map((filiere) => (
+                      <Option key={filiere.id} value={filiere.id}>{filiere.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item style={{ marginBottom: 0, marginTop: spacing.lg }}>
+              <div style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: spacing.md,
+              }}>
+                <Button onClick={closeModal} disabled={loadingSubmit}>
+                  Annuler
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loadingSubmit}
+                  style={{ borderRadius: borderRadius.sm }}
+                >
+                  {isEditing ? "Enregistrer les modifications" : "Ajouter le module"}
+                </Button>
+              </div>
+            </Form.Item>
+          </Form>
+        </Spin>
+      </Modal>
     </div>
   );
 };
